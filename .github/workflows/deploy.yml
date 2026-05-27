@@ -1,0 +1,81 @@
+name: Local Server Deploy (CI/CD)
+
+# Kích hoạt workflow khi có hành động push lên nhánh main hoặc master
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  deploy:
+    # Chạy trực tiếp trên GitHub Self-hosted Runner cài đặt trên Ubuntu của bạn
+    runs-on: self-hosted
+
+    steps:
+      # Bước 1: Kéo mã nguồn mới nhất từ kho lưu trữ GitHub về máy chủ
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Bước 2: Tự động khởi tạo cấu hình môi trường (.env) cho cả Backend và Frontend
+      # Tích hợp cơ chế tự động phòng vệ (Fallback) nếu bạn chưa cấu hình GitHub Secrets
+      - name: Setup Environment Files (.env)
+        run: |
+          echo "=== Khởi tạo cấu hình môi trường ==="
+          
+          # --- 2.1 CẤU HÌNH BACKEND .ENV ---
+          # Lấy mật khẩu DB từ GitHub Secrets, nếu chưa cấu hình thì mặc định là 'rootpassword' (khớp với docker-compose.yml)
+          DB_PASS="${{ secrets.DB_PASSWORD }}"
+          if [ -z "$DB_PASS" ]; then
+            DB_PASS="rootpassword"
+            echo "⚠️ Cảnh báo: Chưa cấu hình Secret 'DB_PASSWORD'. Sử dụng mật khẩu mặc định: 'rootpassword'"
+          fi
+          
+          cat <<EOF > backend/.env
+          PORT=5000
+          NODE_ENV=production
+          DB_HOST=db
+          DB_PORT=3306
+          DB_USER=root
+          DB_PASSWORD=$DB_PASS
+          DATABASE_URL=mysql://root:$DB_PASS@db:3306/todo_db
+          EOF
+          
+          echo "✅ Đã tạo file backend/.env thành công."
+          
+          # --- 2.2 CẤU HÌNH FRONTEND .ENV ---
+          # Ở môi trường mạng nội bộ, trình duyệt của máy khách (ví dụ máy Windows của bạn) 
+          # sẽ gửi API tới IP của máy ảo Ubuntu. Do đó, chúng ta cần nạp IP nội bộ của máy chủ Ubuntu.
+          # Nếu bạn cấu hình Secret 'SERVER_IP' (ví dụ 192.168.1.100), hệ thống sẽ dùng IP đó.
+          # Nếu chưa cấu hình, hệ thống sẽ tự động quét và lấy địa chỉ IP LAN (eth0/ens33/ens18/wlan0) của máy chủ Ubuntu!
+          SERVER_IP="${{ secrets.SERVER_IP }}"
+          if [ -z "$SERVER_IP" ]; then
+            # Lệnh tự động lấy địa chỉ IP LAN thực tế của máy chủ Ubuntu
+            SERVER_IP=$(hostname -I | awk '{print $1}')
+            echo "💡 Tự động phát hiện IP LAN của máy chủ Ubuntu: $SERVER_IP"
+          fi
+          
+          cat <<EOF > frontend/.env
+          VITE_API_URL=http://$SERVER_IP:5000
+          EOF
+          
+          echo "✅ Đã tạo file frontend/.env thành công (API trỏ về: http://$SERVER_IP:5000)."
+
+      # Bước 3: Khởi chạy đóng gói và chạy Docker Compose ứng dụng
+      - name: Build & Run Multi-Container Stack
+        run: |
+          echo "=== Đang khởi động Docker Compose ==="
+          # docker compose down: Dừng và xóa các container cũ đang chạy để tránh xung đột cổng
+          docker compose down
+          
+          # docker compose up -d --build: Build lại mã nguồn mới nhất và chạy ngầm (detached mode)
+          docker compose up -d --build
+          echo "🚀 Hệ thống container đã khởi chạy thành công!"
+
+      # Bước 4: Dọn dẹp các tệp tin và Image thừa (Dangling Images)
+      # Đây là bước cực kỳ quan trọng giúp bảo vệ ổ cứng máy chủ không bị đầy sau nhiều lần CI/CD build code
+      - name: Clean Up Docker Dangling Images
+        run: |
+          echo "=== Đang dọn dẹp dung lượng ổ cứng máy chủ ==="
+          docker image prune -f
+          echo "🧹 Đã dọn dẹp các layer Docker dư thừa thành công."
