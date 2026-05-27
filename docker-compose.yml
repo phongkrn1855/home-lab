@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # DỊCH VỤ 1: DATABASE (MYSQL CONTAINER)
+  # ==========================================
+  db:
+    image: mysql:8.0
+    container_name: todo-mysql-db
+    restart: always
+    ports:
+      - "3306:3306" # Mở cổng 3306 để kết nối từ bên ngoài (ví dụ DBeaver/TablePlus)
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: todo_db
+    volumes:
+      - mysql-data:/var/lib/mysql # Ánh xạ volume để dữ liệu được lưu bền vững không bị mất
+    # Bộ kiểm tra sức khỏe (Healthcheck) đảm bảo MySQL khởi động hoàn tất
+    # và chấp nhận kết nối trước khi khởi động các dịch vụ phụ thuộc.
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pRootpassword"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ==========================================
+  # DỊCH VỤ 2: BACKEND (NODE.JS + EXPRESS API)
+  # ==========================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: todo-backend-server
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      PORT: 5000
+      NODE_ENV: development
+      # Sử dụng host 'db' (tên của service database ở trên) để kết nối
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: rootpassword
+      DB_NAME: todo_db
+      DATABASE_URL: mysql://root:rootpassword@db:3306/todo_db
+    depends_on:
+      db:
+        condition: service_healthy # Chỉ chạy khi service DB đã hoàn toàn khỏe mạnh
+
+  # ==========================================
+  # DỊCH VỤ 3: FRONTEND (REACT + NGINX)
+  # ==========================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      # Truyền biến VITE_API_URL làm Build Argument.
+      # LƯU Ý: Trình duyệt của bạn chạy ứng dụng React trên máy cá nhân, 
+      # do đó React phải gửi request API tới 'http://localhost:5000' (máy thật)
+      # chứ KHÔNG phải 'http://backend:5000' (tên mạng nội bộ Docker).
+      args:
+        - VITE_API_URL=http://localhost:5000
+    container_name: todo-frontend-web
+    restart: always
+    ports:
+      - "5173:80" # Ánh xạ cổng 80 (Nginx trong container) ra cổng 5173 ở máy vật lý
+    depends_on:
+      - backend
+
+# Định nghĩa Volume lưu cơ sở dữ liệu bền vững
+volumes:
+  mysql-data:
+    driver: local
