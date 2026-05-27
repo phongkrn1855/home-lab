@@ -142,6 +142,12 @@ function App() {
       <header className="header">
         <h1>TASKFLOW</h1>
         <p>Hệ thống quản lý công việc cá nhân cao cấp</p>
+        
+        {/* Badge kiểm thử CI/CD siêu trực quan */}
+        <div className="cicd-badge">
+          <span className="pulse-dot"></span>
+          <span>CI/CD: Auto-Deployed via GitHub Actions 🚀</span>
+        </div>
       </header>
 
       <main className="glass-panel">
