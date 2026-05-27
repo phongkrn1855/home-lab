@@ -56,12 +56,9 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      # Truyền biến VITE_API_URL làm Build Argument.
-      # LƯU Ý: Trình duyệt của bạn chạy ứng dụng React trên máy cá nhân, 
-      # do đó React phải gửi request API tới 'http://localhost:5000' (máy thật)
-      # chứ KHÔNG phải 'http://backend:5000' (tên mạng nội bộ Docker).
+      # Truyền biến VITE_API_URL làm Build Argument động lấy từ tệp .env ở thư mục gốc.
       args:
-        - VITE_API_URL=http://localhost:5000
+        - VITE_API_URL=${VITE_API_URL:-http://localhost:5000}
     container_name: todo-frontend-web
     restart: always
     ports:

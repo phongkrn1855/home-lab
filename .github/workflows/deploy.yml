@@ -55,11 +55,12 @@ jobs:
             echo "💡 Tự động phát hiện IP LAN của máy chủ Ubuntu: $SERVER_IP"
           fi
           
-          cat <<EOF > frontend/.env
+          # Ghi VITE_API_URL vào tệp .env ở thư mục gốc để Docker Compose nạp khi build container
+          cat <<EOF > .env
           VITE_API_URL=http://$SERVER_IP:5000
           EOF
           
-          echo "✅ Đã tạo file frontend/.env thành công (API trỏ về: http://$SERVER_IP:5000)."
+          echo "✅ Đã tạo file .env ở thư mục gốc thành công (API trỏ về: http://$SERVER_IP:5000)."
 
       # Bước 3: Khởi chạy đóng gói và chạy Docker Compose ứng dụng
       - name: Build & Run Multi-Container Stack
